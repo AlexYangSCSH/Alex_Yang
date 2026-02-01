@@ -58,7 +58,7 @@ class Const:
     N_ELEVATORS: int = 3
 
     # --- 传统火箭系统 (CRL) 参数 ---
-    LOAD_ROCKET: float = 150.0      # [Tons] 单枚火箭载荷 (Problem4 假设)
+    LOAD_ROCKET: float = 125.0      # [Tons] 单枚火箭载荷 (Problem4 假设)
     N_PADS: int = 10                # [个] 发射台数量
     TURN_AROUND: float = 1.0        # [Days] 发射台周转时间
     COST_LAUNCH_INIT: float = 97e7  # [USD] 发射成本(2022年，可回收)
@@ -343,3 +343,4 @@ def model4():
 
 if __name__ == "__main__":
     model4()
+

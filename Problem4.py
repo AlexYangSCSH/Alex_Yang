@@ -28,59 +28,33 @@ set_chinese_font()
 # 2. 模型参数定义 (Problem1 + Problem2 不完美参数)
 # ==============================================================================
 
+# --- 任务总需求 ---
+M_REQ = 1.0e8  # [Tons] 1亿吨物资
 
-@dataclass(frozen=True)
-class Const:
-    # --- 任务总量 ---
-    M_REQ: float = 1.0e8  # 1亿吨 (Tons)
+# --- 太空电梯系统 (SES) 参数 ---
+PHI_SES_YEAR = 537000.0    # [Tons/Year] 系统总年通量
+COST_SES_CONSTR = 3.0e10   # [USD] 系统建设成本
+COST_SES_VAR = 200.0       # [USD/Ton] 单位质量边际运输成本
+COST_SES_FIX = 0.05 * COST_SES_CONSTR      # [USD/Year] 系统维护费
+N_ELEVATORS = 3
 
-    # --- Model 4.1: 火箭物理参数 ---
-    ISP: float = 300.0  # RP-1 比冲 (s)
-    G0: float = 9.80665  # 重力 (m/s^2)
-    BETA: float = 3.16  # 排放因子 (kg CO2 / kg Fuel)
-    LAMBDA: float = 0.05  # 结构系数
-    DV_TLI_BASE: float = 10800.0  # 基础入轨速度 (m/s)
-    V_PARK: float = 7800.0  # 泊车轨道速度 (m/s)
-    MOON_INC: float = 28.0  # 月球轨道倾角 (deg)
+# --- 传统火箭系统 (CRL) 参数 ---
+LOAD_ROCKET = 125.0      # [Tons] 单枚火箭载荷 (Problem4 假设)
+N_PADS = 10              # [个] 发射台数量
+TURN_AROUND = 1          # [Days] 发射台周转时间
+COST_LAUNCH_INIT = 9.7e7  # [USD] 发射成本(2022年，可回收)
+LEARNING_RATE = 1e-4     # [Float] Wright's Law 学习率
 
-    # --- Model 4.3: 电梯能耗参数 ---
-    # 地球半径 6371km, GEO 42164km
-    # 理论势能差 approx 58 MJ/kg. 考虑效率 eta=0.6, E_real approx 96 MJ/kg
-    # 1 kWh = 3.6 MJ -> E_real approx 26.7 kWh/kg
-    ELEVATOR_EFFICIENCY: float = 0.6
-    E_THEORETICAL_GEO: float = 5.8e7  # J/kg (approx)
+# --- 不完美运行 (来自 Problem2, 使用均值) ---
+SWAY_LOSS_MEAN = 0.10
+ELEVATOR_FAILURE_RATE = 1.0  # 次/年/电梯
+ELEVATOR_DOWNTIME_DAYS = 14  # 天
 
-    # --- 太空电梯系统 (SES) 参数 ---
-    PHI_SES_YEAR: float = 537000.0    # [Tons/Year] 系统总年通量
-    COST_SES_CONSTR: float = 3.0e10   # [USD] 系统建设成本
-    COST_SES_VAR: float = 200.0       # [USD/Ton] 单位质量边际运输成本
-    COST_SES_FIX_RATE: float = 0.05   # [USD/Year] 系统维护费率
-    N_ELEVATORS: int = 3
+ROCKET_FAIL_RATE = 0.02
+ROCKET_LAUNCH_PROB = 0.95
 
-    # --- 传统火箭系统 (CRL) 参数 ---
-    LOAD_ROCKET: float = 125.0      # [Tons] 单枚火箭载荷 (Problem4 假设)
-    N_PADS: int = 10                # [个] 发射台数量
-    TURN_AROUND: float = 1.0        # [Days] 发射台周转时间
-    COST_LAUNCH_INIT: float = 97e7  # [USD] 发射成本(2022年，可回收)
-    LEARNING_RATE: float = 1e-4     # [Float] Wright's Law 学习率
-
-    # --- 不完美运行 (来自 Problem2, 使用均值) ---
-    SWAY_LOSS_MEAN: float = 0.10
-    ELEVATOR_FAILURE_RATE: float = 1.0  # 次/年/电梯
-    ELEVATOR_DOWNTIME_DAYS: float = 14.0  # 天
-
-    ROCKET_FAIL_RATE: float = 0.02
-    ROCKET_LAUNCH_PROB: float = 0.95
-
-    # --- 权重偏好 ---
-    GAMMA_DEFAULT: float = 0.2
-
-    # --- 环境净化成本 ---
-    ENV_CLEANUP_COST_PER_TON: float = 100.0  # [USD/Ton]
-
-
-CONST = Const()
-COST_SES_FIX = CONST.COST_SES_FIX_RATE * CONST.COST_SES_CONSTR
+# --- 权重偏好 ---
+GAMMA_DEFAULT = 0.2
 
 # ==============================================================================
 # 3. 火箭燃料与环境成本 (Problem4)
@@ -100,9 +74,23 @@ RAW_SITES = [
 ]
 
 
+@dataclass(frozen=True)
+class RocketParams:
+    G0: float = 9.80665  # [m/s^2]
+    ISP: float = 450.0   # [s]
+    DV_TLI_BASE: float = 9400.0  # [m/s] 基础速度需求
+    V_PARK: float = 7800.0       # [m/s] 近地停泊轨道速度
+    MOON_INC: float = 28.5       # [deg] 目标轨道倾角
+
+
+PARAMS = RocketParams()
+
 # 结构比 & 多级火箭限制
-STRUCTURAL_FRACTION = CONST.LAMBDA
+STRUCTURAL_FRACTION = 0.08
 MAX_STAGE_RATIO = 10.0
+
+# 环境净化成本 (USD/ton fuel)
+ENV_CLEANUP_COST_PER_TON = 100.0
 
 
 def calc_fuel_mass_for_lat(lat_deg, payload_tons):
@@ -119,12 +107,12 @@ def calc_fuel_mass_for_lat(lat_deg, payload_tons):
 
     # 2. 平面机动 (Plane Change)
     dv_inc = 0.0
-    if phi > CONST.MOON_INC:
-        delta = np.radians(phi - CONST.MOON_INC)
-        dv_inc = 2 * CONST.V_PARK * np.sin(delta / 2.0)
+    if phi > PARAMS.MOON_INC:
+        delta = np.radians(phi - PARAMS.MOON_INC)
+        dv_inc = 2 * PARAMS.V_PARK * np.sin(delta / 2.0)
 
-    dv_total = CONST.DV_TLI_BASE + dv_rot + dv_inc
-    ve = CONST.ISP * CONST.G0
+    dv_total = PARAMS.DV_TLI_BASE + dv_rot + dv_inc
+    ve = PARAMS.ISP * PARAMS.G0
 
     total_ratio = np.exp(dv_total / ve)
     if total_ratio <= MAX_STAGE_RATIO:
@@ -157,7 +145,7 @@ def calc_fuel_mass_for_lat(lat_deg, payload_tons):
 def optimize_launch_allocation(total_launches):
     fuel_per_launch = []
     for _, lat in RAW_SITES:
-        fuel_mass, _ = calc_fuel_mass_for_lat(lat, CONST.LOAD_ROCKET)
+        fuel_mass, _ = calc_fuel_mass_for_lat(lat, LOAD_ROCKET)
         fuel_per_launch.append(fuel_mass)
 
     weights = np.array([1.0 / max(1e-9, fuel) for fuel in fuel_per_launch])
@@ -196,9 +184,9 @@ def calc_site_impacts(total_launches):
     for idx, (name, lat) in enumerate(RAW_SITES):
         launches = int(launches_alloc[idx])
         fuel_per_launch = fuel_per_launch_list[idx]
-        _, dv_total = calc_fuel_mass_for_lat(lat, CONST.LOAD_ROCKET)
+        _, dv_total = calc_fuel_mass_for_lat(lat, LOAD_ROCKET)
         fuel_total = fuel_per_launch * launches
-        env_cost = fuel_total * CONST.ENV_CLEANUP_COST_PER_TON
+        env_cost = fuel_total * ENV_CLEANUP_COST_PER_TON
         site_records.append({
             "Site": name,
             "Latitude": lat,
@@ -219,28 +207,28 @@ def calc_site_impacts(total_launches):
 
 
 def calc_crl_capacity_rate():
-    flights_per_year = CONST.N_PADS * (365.0 / CONST.TURN_AROUND)
-    return flights_per_year * CONST.LOAD_ROCKET
+    flights_per_year = N_PADS * (365.0 / TURN_AROUND)
+    return flights_per_year * LOAD_ROCKET
 
 
 def calc_learning_curve_cost(n_launches):
     if n_launches <= 0:
         return 0.0
-    b = -np.log2(1 - CONST.LEARNING_RATE)
-    term1 = CONST.COST_LAUNCH_INIT / (1 - b)
+    b = -np.log2(1 - LEARNING_RATE)
+    term1 = COST_LAUNCH_INIT / (1 - b)
     term2 = np.power(n_launches, 1 - b) - 1.0
     return term1 * term2
 
 
 def calc_ses_time_cost(mass_ses):
-    base_time_ses = mass_ses / CONST.PHI_SES_YEAR if CONST.PHI_SES_YEAR > 0 else float('inf')
-    loss_factor = 1.0 / max(1e-6, (1.0 - CONST.SWAY_LOSS_MEAN))
+    base_time_ses = mass_ses / PHI_SES_YEAR if PHI_SES_YEAR > 0 else float('inf')
+    loss_factor = 1.0 / max(1e-6, (1.0 - SWAY_LOSS_MEAN))
 
-    expected_uptime = 1.0 - (CONST.ELEVATOR_FAILURE_RATE * CONST.ELEVATOR_DOWNTIME_DAYS / 365.0)
+    expected_uptime = 1.0 - (ELEVATOR_FAILURE_RATE * ELEVATOR_DOWNTIME_DAYS / 365.0)
     capacity_factor = max(1e-6, expected_uptime)
 
     time_ses = base_time_ses * loss_factor / capacity_factor
-    cost_ses = (COST_SES_FIX * time_ses) + (CONST.COST_SES_VAR * mass_ses)
+    cost_ses = (COST_SES_FIX * time_ses) + (COST_SES_VAR * mass_ses)
     return time_ses, cost_ses
 
 
@@ -248,17 +236,17 @@ def calc_crl_time_cost(mass_crl):
     if mass_crl <= 0:
         return 0.0, 0.0, 0.0, 0
 
-    required_success = int(np.ceil(mass_crl / CONST.LOAD_ROCKET))
-    expected_total_launches = required_success / max(1e-6, (1.0 - CONST.ROCKET_FAIL_RATE))
-    flights_per_year = CONST.N_PADS * (365.0 / CONST.TURN_AROUND) * CONST.ROCKET_LAUNCH_PROB
+    required_success = int(np.ceil(mass_crl / LOAD_ROCKET))
+    expected_total_launches = required_success / max(1e-6, (1.0 - ROCKET_FAIL_RATE))
+    flights_per_year = N_PADS * (365.0 / TURN_AROUND) * ROCKET_LAUNCH_PROB
     time_crl = expected_total_launches / flights_per_year
     cost_crl = calc_learning_curve_cost(expected_total_launches)
     return time_crl, cost_crl, expected_total_launches, required_success
 
 
 def solve_system_metrics(alpha):
-    mass_ses = alpha * CONST.M_REQ
-    mass_crl = (1.0 - alpha) * CONST.M_REQ
+    mass_ses = alpha * M_REQ
+    mass_crl = (1.0 - alpha) * M_REQ
 
     time_ses, cost_ses = calc_ses_time_cost(mass_ses)
     time_crl, cost_crl, expected_launches, required_success = calc_crl_time_cost(mass_crl)
@@ -299,7 +287,7 @@ def normalize_metrics(df):
     return norm_time.flatten(), norm_cost.flatten()
 
 
-def find_optimal_alpha(df, gamma=CONST.GAMMA_DEFAULT):
+def find_optimal_alpha(df, gamma=GAMMA_DEFAULT):
     norm_time, norm_cost = normalize_metrics(df)
     df = df.copy()
     df['J_Score'] = gamma * norm_cost + (1.0 - gamma) * norm_time
@@ -321,7 +309,7 @@ def model4():
         site_tables.append(site_df)
 
     df = pd.DataFrame(results)
-    df, opt_sol = find_optimal_alpha(df, CONST.GAMMA_DEFAULT)
+    df, opt_sol = find_optimal_alpha(df, GAMMA_DEFAULT)
 
     idx_time_min = df['Time_Total'].idxmin()
     idx_cost_min = df['Cost_Total'].idxmin()
@@ -343,4 +331,3 @@ def model4():
 
 if __name__ == "__main__":
     model4()
-

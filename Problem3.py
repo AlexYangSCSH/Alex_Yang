@@ -11,7 +11,7 @@ plt.style.use('seaborn-v0_8-whitegrid')
 
 def set_chinese_font():
     system_fonts = [f.name for f in mpl.font_manager.fontManager.ttflist]
-    preferred_fonts = ['SimHei', 'Arial Unicode MS', 'Songti SC', 'Microsoft YaHei']
+    preferred_fonts = ['SimHei', 'Arial Unicode MS', 'Songti SC', 'M icrosoft YaHei']
     for font in preferred_fonts:
         if font in system_fonts:
             mpl.rcParams['font.sans-serif'] = [font]
@@ -27,7 +27,7 @@ set_chinese_font()
 # 2. 模型参数定义 (继承自模型假设)
 # ==============================================================================
 
-M_REQ = 1.0e8  # [Tons] 1亿吨物资
+M_REQ = 8300100  * 0.05 # [Tons] 每年需要运送的水量，假设95%的回收率
 
 # --- 太空电梯系统 (SES) 参数 ---
 PHI_SES_YEAR = 537000.0    # [Tons/Year] 系统总年通量

@@ -43,7 +43,7 @@ COST_SES_FIX = 0.05 * COST_SES_CONSTR      # [USD/Year] 系统维护费
 LOAD_ROCKET = 125.0      # [Tons] 单枚火箭载荷 # 
 N_PADS = 10              # [个] 发射台数量 (参考数据)
 TURN_AROUND = 1         # [Days] 发射台周转时间 (冷却+检修) 
-COST_LAUNCH_INIT = 97e7  # [USD] 发射成本(2022年，可回收) (97 Million USD) 
+COST_LAUNCH_INIT = 9.7e7  # [USD] 发射成本(2022年，可回收) (97 Million USD) 
 LEARNING_RATE = 1e-4        # [Float] Wright's Law 学习率 (10%) # 
 
 # --- 权重偏好 ---
